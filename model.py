@@ -11,7 +11,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 def get_cnn(arch, pretrained):
-  return torchvision.models.__dict__[arch](pretrained=pretrained) 
+  return torchvision.models.__dict__[arch](pretrained=pretrained)                 # 取预训练模型
 
 
 def l2norm(x):
@@ -32,7 +32,7 @@ def get_pad_mask(max_length, lengths, set_pad_to_one=True):
 class MultiHeadSelfAttention(nn.Module):
   """Self-attention module by Lin, Zhouhan, et al. ICLR 2017"""
 
-  def __init__(self, n_head, d_in, d_hidden):
+  def __init__(self, n_head, d_in, d_hidden):                      # 2, cnn_dim, 1024
     super(MultiHeadSelfAttention, self).__init__()
 
     self.n_head = n_head
@@ -48,7 +48,7 @@ class MultiHeadSelfAttention(nn.Module):
 
   def forward(self, x, mask=None):
     # This expects input x to be of size (b x seqlen x d_feat)
-    attn = self.w_2(self.tanh(self.w_1(x)))
+    attn = self.w_2(self.tanh(self.w_1(x)))                       # [bs, seqlen, 2]
     if mask is not None:
       mask = mask.repeat(self.n_head, 1, 1).permute(1,2,0)
       attn.masked_fill_(mask, -np.inf)
@@ -63,7 +63,7 @@ class MultiHeadSelfAttention(nn.Module):
 class PIENet(nn.Module):
   """Polysemous Instance Embedding (PIE) module"""
 
-  def __init__(self, n_embeds, d_in, d_out, d_h, dropout=0.0):
+  def __init__(self, n_embeds, d_in, d_out, d_h, dropout=0.0):                 # 2, d_in=cnn_dim, d_out=1024, dropout=0.0
     super(PIENet, self).__init__()
 
     self.num_embeds = n_embeds
@@ -108,12 +108,12 @@ class EncoderImage(nn.Module):
   def __init__(self, opt):
     super(EncoderImage, self).__init__()
 
-    embed_size, num_embeds = opt.embed_size, opt.num_embeds
-    self.use_attention = opt.img_attention
-    self.abs = True if hasattr(opt, 'order') and opt.order else False
+    embed_size, num_embeds = opt.embed_size, opt.num_embeds                # 1024 2
+    self.use_attention = opt.img_attention                                 # True
+    self.abs = True if hasattr(opt, 'order') and opt.order else False      # Flase
 
     # Backbone CNN
-    self.cnn = get_cnn(opt.cnn_type, True)
+    self.cnn = get_cnn(opt.cnn_type, True)                                 # resnet152
     cnn_dim = self.cnn_dim = self.cnn.fc.in_features
 
     self.avgpool = self.cnn.avgpool
@@ -128,14 +128,14 @@ class EncoderImage(nn.Module):
       self.pie_net = PIENet(num_embeds, cnn_dim, embed_size, cnn_dim//2, opt.dropout)
 
     for idx, param in enumerate(self.cnn.parameters()):
-      param.requires_grad = opt.img_finetune
+      param.requires_grad = opt.img_finetune                                # Flase
 
   def init_weights(self):
     nn.init.xavier_uniform_(self.fc.weight)
     nn.init.constant_(self.fc.bias, 0.0)
 
   def forward(self, images):
-    out_7x7 = self.cnn(images).view(-1, self.cnn_dim, 7, 7)
+    out_7x7 = self.cnn(images).view(-1, self.cnn_dim, 7, 7)                
     out = self.avgpool(out_7x7).view(-1, self.cnn_dim)
     out = self.fc(out)
     out = self.dropout(out)
@@ -144,7 +144,7 @@ class EncoderImage(nn.Module):
     attn, residual = None, None
     if self.use_attention:
       out_7x7 = out_7x7.view(-1, self.cnn_dim, 7 * 7)
-      out, attn, residual = self.pie_net(out, out_7x7.transpose(1,2))
+      out, attn, residual = self.pie_net(out, out_7x7.transpose(1,2))     # why mask
     
     out = l2norm(out)
     if self.abs:
