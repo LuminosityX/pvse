@@ -28,7 +28,7 @@ def get_uid_tgif(url):
   return url.strip().split('/')[-1].replace('.gif','')
 
 
-def get_paths(path, name='coco', use_restval=True):
+def get_paths(path, name='coco', use_restval=True):                                              # root中有img, annotations的路径, ids则是split的句子id,由下面注释中代码得到
   """
   Returns paths to images and annotations for the given datasets. For MSCOCO
   indices are also returned to control the data split being used.
@@ -114,8 +114,8 @@ class CocoDataset(data.Dataset):
     """
     self.root = root
     # when using `restval`, two json files are needed
-    if isinstance(json, tuple):
-      self.coco = (COCO(json[0]), COCO(json[1]))
+    if isinstance(json, tuple):                         # COCO是该数据集提供的帮助处理数据的函数类
+      self.coco = (COCO(json[0]), COCO(json[1]))        # COCO会根据提供的json文件来处理文本的一些格式
     else:
       self.coco = (COCO(json),)
       self.root = (root,)
@@ -157,7 +157,7 @@ class CocoDataset(data.Dataset):
     return image, target, index, img_id
 
 
-  def get_raw_item(self, index):
+  def get_raw_item(self, index):                     # coco是json文件，也就是文本的
     if index < self.bp:
       coco, root = self.coco[0], self.root[0]
     else:
@@ -355,6 +355,7 @@ def collate_fn(data):
     targets: torch tensor of shape (batch_size, padded_length).
     lengths: list; valid length for each padded sentence.
   """
+  # mscoco： return image, target, index, img_id
   # Sort a data list by sentence length
   data.sort(key=lambda x: len(x[1]), reverse=True)
   images, sentences, ids, img_ids = zip(*data)
@@ -364,7 +365,7 @@ def collate_fn(data):
 
   # Merge sentences (convert tuple of 1D tensor to 2D tensor)
   cap_lengths = torch.tensor([len(cap) for cap in sentences])
-  targets = torch.zeros(len(sentences), max(cap_lengths)).long()
+  targets = torch.zeros(len(sentences), max(cap_lengths)).long()    # 每一个batch的文本长度不一致
   for i, cap in enumerate(sentences):
     end = cap_lengths[i]
     targets[i, :end] = cap[:end]
@@ -377,8 +378,8 @@ def get_loader_single(data_name, split, root, json, vocab, transform,
                       ids=None, collate_fn=collate_fn, opt=None):
   """Returns torch.utils.data.DataLoader for custom coco dataset."""
   if 'coco' in data_name:
-    dataset = CocoDataset(root=root,
-                          json=json,
+    dataset = CocoDataset(root=root,                # img的路径
+                          json=json,                # annotation的路径
                           vocab=vocab,
                           transform=transform, 
                           ids=ids)
@@ -436,11 +437,11 @@ def get_video_transform(data_name, split_name, opt):
 
 
 def get_image_transform(data_name, split_name, opt):
-  normalizer = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+  normalizer = transforms.Normalize(mean=[0.485, 0.456, 0.406],                  # ImageNet mean and std
                                     std=[0.229, 0.224, 0.225])
   t_list = []
   if split_name == 'train':
-    t_list = [transforms.RandomResizedCrop(opt.crop_size)]
+    t_list = [transforms.RandomResizedCrop(opt.crop_size)]                       # 224 
     if not (data_name == 'mrw' or data_name == 'tgif'):
       t_list += [transforms.RandomHorizontalFlip()]
   elif split_name == 'val':
