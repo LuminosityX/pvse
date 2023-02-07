@@ -36,8 +36,8 @@ class MultiHeadSelfAttention(nn.Module):
     super(MultiHeadSelfAttention, self).__init__()
 
     self.n_head = n_head
-    self.w_1 = nn.Linear(d_in, d_hidden, bias=False)
-    self.w_2 = nn.Linear(d_hidden, n_head, bias=False)
+    self.w_1 = nn.Linear(d_in, d_hidden, bias=False)               # 2048 -> 1024
+    self.w_2 = nn.Linear(d_hidden, n_head, bias=False)             # 1024 -> 2
     self.tanh = nn.Tanh()
     self.softmax = nn.Softmax(dim=1)
     self.init_weights()
@@ -54,7 +54,7 @@ class MultiHeadSelfAttention(nn.Module):
       attn.masked_fill_(mask, -np.inf)
     attn = self.softmax(attn)
 
-    output = torch.bmm(attn.transpose(1,2), x)
+    output = torch.bmm(attn.transpose(1,2), x)                    # [bs ,2, 2048]
     if output.shape[1] == 1:
       output = output.squeeze(1)
     return output, attn
@@ -63,7 +63,7 @@ class MultiHeadSelfAttention(nn.Module):
 class PIENet(nn.Module):
   """Polysemous Instance Embedding (PIE) module"""
 
-  def __init__(self, n_embeds, d_in, d_out, d_h, dropout=0.0):                 # 2, d_in=cnn_dim, d_out=1024, dropout=0.0
+  def __init__(self, n_embeds, d_in, d_out, d_h, dropout=0.0):                 # 2, d_in=cnn_dim=2048, d_out=1024,, d_h=1024, dropout=0.0
     super(PIENet, self).__init__()
 
     self.num_embeds = n_embeds
@@ -78,9 +78,9 @@ class PIENet(nn.Module):
     nn.init.xavier_uniform_(self.fc.weight)
     nn.init.constant_(self.fc.bias, 0.0)
 
-  def forward(self, out, x, pad_mask=None):
+  def forward(self, out, x, pad_mask=None):                                   # out = global_feature [bs, 1024], x [bs, 49, 2048]
     residual, attn = self.attention(x, pad_mask)
-    residual = self.dropout(self.sigmoid(self.fc(residual)))
+    residual = self.dropout(self.sigmoid(self.fc(residual)))                  # [bs, 2, 1024]
     if self.num_embeds > 1:
       out = out.unsqueeze(1).repeat(1, self.num_embeds, 1)
     out = self.layer_norm(out + residual)
@@ -125,7 +125,7 @@ class EncoderImage(nn.Module):
     self.dropout = nn.Dropout(opt.dropout)
 
     if self.use_attention:
-      self.pie_net = PIENet(num_embeds, cnn_dim, embed_size, cnn_dim//2, opt.dropout)
+      self.pie_net = PIENet(num_embeds, cnn_dim, embed_size, cnn_dim//2, opt.dropout)   # 2, 2048, 1024, 2048//2, 0.0
 
     for idx, param in enumerate(self.cnn.parameters()):
       param.requires_grad = opt.img_finetune                                # Flase
@@ -137,20 +137,20 @@ class EncoderImage(nn.Module):
   def forward(self, images):
     out_7x7 = self.cnn(images).view(-1, self.cnn_dim, 7, 7)                
     out = self.avgpool(out_7x7).view(-1, self.cnn_dim)
-    out = self.fc(out)
+    out = self.fc(out)                                                    # [b, 1024]
     out = self.dropout(out)
 
     # compute self-attention map
     attn, residual = None, None
     if self.use_attention:
-      out_7x7 = out_7x7.view(-1, self.cnn_dim, 7 * 7)
-      out, attn, residual = self.pie_net(out, out_7x7.transpose(1,2))     # why mask
+      out_7x7 = out_7x7.view(-1, self.cnn_dim, 7 * 7)                     # [bs, 2048, 49]
+      out, attn, residual = self.pie_net(out, out_7x7.transpose(1,2))     # not have mask
     
     out = l2norm(out)
     if self.abs:
       out = torch.abs(out)
 
-    return out, attn, residual
+    return out, attn, residual                                            # [bs, 2, 1024], [bs, 49, 2], [bs, 2, 1024]
 
 
 class EncoderVideo(nn.Module):
@@ -226,16 +226,16 @@ class EncoderText(nn.Module):
     super(EncoderText, self).__init__()
 
     wemb_type, word_dim, embed_size, num_embeds = \
-      opt.wemb_type, opt.word_dim, opt.embed_size, opt.num_embeds
+      opt.wemb_type, opt.word_dim, opt.embed_size, opt.num_embeds                           # glove, 300, 1024, 2
 
     self.embed_size = embed_size
-    self.use_attention = opt.txt_attention
-    self.abs = True if hasattr(opt, 'order') and opt.order else False
-    self.legacy = opt.legacy
+    self.use_attention = opt.txt_attention                                                  # True
+    self.abs = True if hasattr(opt, 'order') and opt.order else False                       # False
+    self.legacy = opt.legacy                                                                # False
 
     # Word embedding
     self.embed = nn.Embedding(len(word2idx), word_dim)
-    self.embed.weight.requires_grad = opt.txt_finetune
+    self.embed.weight.requires_grad = opt.txt_finetune                                      # False
 
     # Sentence embedding
     self.rnn = nn.GRU(word_dim, embed_size//2, bidirectional=True, batch_first=True)
@@ -252,7 +252,7 @@ class EncoderText(nn.Module):
       # Load pretrained word embedding
       if 'fasttext' == wemb_type.lower():
         wemb = torchtext.vocab.FastText()
-      elif 'glove' == wemb_type.lower():
+      elif 'glove' == wemb_type.lower():                                                   # Yes
         wemb = torchtext.vocab.GloVe()
       else:
         raise Exception('Unknown word embedding type: {}'.format(wemb_type))
@@ -266,15 +266,15 @@ class EncoderText(nn.Module):
           if '/' in word:
             word = word.split('/')[0]
         if word in wemb.stoi:
-          self.embed.weight.data[idx] = wemb.vectors[wemb.stoi[word]]
+          self.embed.weight.data[idx] = wemb.vectors[wemb.stoi[word]]                     # 加载模型数据
         else:
           missing_words.append(word)
       print('Words: {}/{} found in vocabulary; {} words missing'.format(
         len(word2idx)-len(missing_words), len(word2idx), len(missing_words)))
 
-  def forward(self, x, lengths):
+  def forward(self, x, lengths):                                                          # [bs, l]
     # Embed word ids to vectors
-    wemb_out = self.embed(x)
+    wemb_out = self.embed(x)                                                              # [bs, l, 300]
     wemb_out = self.dropout(wemb_out)
 
     # Forward propagate RNNs
@@ -283,7 +283,7 @@ class EncoderText(nn.Module):
       self.rnn.flatten_parameters()
     
     # Use legacy mode to reproduce results in CVPR 2018 paper
-    if self.legacy:
+    if self.legacy:                                                                      # ???   pad_packed_sequence 和 pack_padded_sequence的细节，GRU的细节，gather的细节可以好好看一下
       rnn_out, _ = self.rnn(packed)
       padded = pad_packed_sequence(rnn_out, batch_first=True)
       I = lengths.expand(self.embed_size, 1, -1).permute(2, 1, 0) - 1
