@@ -31,7 +31,7 @@ def lock_and_write_to_file(filename, text):
       fid.write('{}\n'.format(text))
 
 
-def copy_input_args_from_ckpt(args, ckpt_args):
+def copy_input_args_from_ckpt(args, ckpt_args):                                            # 加载checkpoint时，复制arguement
   args_to_copy = ['word_dim','crop_size','cnn_type','embed_size', 'num_embeds',
                   'img_attention','txt_attention','max_video_length']
   for arg in args_to_copy:
@@ -179,7 +179,7 @@ def main():
   vocab = pickle.load(open(vocab_path, 'rb'))
 
   # Dataloaders
-  trn_loader, val_loader = data.get_loaders(args, vocab)
+  trn_loader, val_loader = data.get_loaders(args, vocab)                               # 该任务只有coco数据集，且采用的是原始数据，对于图像使用的是resnet152
   val_loader = data.get_test_loader(args, vocab)
 
   # Construct the model
